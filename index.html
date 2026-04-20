@@ -4,7 +4,9 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>顧客分析ダッシュボード | デモ</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
   :root {
     --bg: #f4f6fb;
@@ -34,6 +36,32 @@
     color: var(--text);
     line-height: 1.55;
   }
+  .tabs {
+    display: flex;
+    gap: 4px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 32px;
+  }
+  .tab {
+    background: transparent;
+    border: none;
+    padding: 12px 18px;
+    font-size: 14px;
+    color: var(--muted);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    font-family: inherit;
+    font-weight: 500;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+    font-weight: 600;
+  }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
   header {
     background: var(--surface);
     border-bottom: 1px solid var(--border);
@@ -209,6 +237,78 @@
     border-radius: 4px;
     margin-top: 12px;
   }
+  #map {
+    height: 520px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+  }
+  .map-legend {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 12px;
+  }
+  .map-legend .swatch {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    margin-right: 6px;
+    vertical-align: middle;
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.2);
+  }
+  .map-legend .swatch.purchased { background: #16a34a; }
+  .map-legend .swatch.notpurchased { background: #9ca3af; }
+  .map-legend .ring {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    margin-right: 6px;
+    vertical-align: middle;
+  }
+  .map-legend .ring.r3 { background: rgba(59, 91, 219, 0.25); border: 1px solid #3b5bdb; }
+  .map-legend .ring.r5 { background: rgba(32, 201, 151, 0.18); border: 1px solid #20c997; }
+  .map-controls {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+  }
+  .map-controls label {
+    font-size: 12px;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: #fff;
+    cursor: pointer;
+  }
+  .map-controls label input { margin: 0; }
+  .radius-summary {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-top: 16px;
+  }
+  .radius-card {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+  }
+  .radius-card .r-label { font-size: 12px; color: var(--muted); }
+  .radius-card .r-count { font-size: 22px; font-weight: 700; margin-top: 2px; }
+  .radius-card .r-sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .radius-card.r3 { border-left: 4px solid #3b5bdb; }
+  .radius-card.r5 { border-left: 4px solid #20c997; }
+  .radius-card.rout { border-left: 4px solid #9ca3af; }
+  .leaflet-popup-content { font-family: inherit; font-size: 12px; }
   @media (max-width: 1000px) {
     .grid-3 { grid-template-columns: 1fr 1fr; }
     .kpi-grid { grid-template-columns: 1fr 1fr; }
@@ -225,7 +325,7 @@
 <header>
   <div>
     <h1>顧客分析ダッシュボード</h1>
-    <div class="sub">属性情報とユーザー行動から、入会・初回離反の傾向を把握します</div>
+    <div class="sub">属性情報・行動・売上・商圏を複合的に把握します</div>
   </div>
   <div class="filters">
     <select>
@@ -244,7 +344,13 @@
   </div>
 </header>
 
+<nav class="tabs">
+  <button class="tab active" data-tab="customer">顧客分析</button>
+  <button class="tab" data-tab="sales">売上・商圏分析</button>
+</nav>
+
 <main>
+<div class="tab-panel active" id="tab-customer">
   <!-- KPI -->
   <div class="kpi-grid">
     <div class="kpi">
@@ -330,6 +436,95 @@
       </div>
     </div>
   </section>
+</div>
+<!-- /tab-customer -->
+
+<div class="tab-panel" id="tab-sales">
+  <!-- 売上 KPI -->
+  <div class="kpi-grid">
+    <div class="kpi">
+      <div class="label">月間売上</div>
+      <div class="value">¥18,420,000</div>
+      <div class="delta up">前月比 +6.4%</div>
+    </div>
+    <div class="kpi">
+      <div class="label">平均客単価</div>
+      <div class="value">¥7,820</div>
+      <div class="delta up">前月比 +2.1%</div>
+    </div>
+    <div class="kpi">
+      <div class="label">チケット売上高</div>
+      <div class="value">¥6,240,000</div>
+      <div class="delta up">前月比 +12.8%</div>
+    </div>
+    <div class="kpi">
+      <div class="label">新規来店数</div>
+      <div class="value">284</div>
+      <div class="delta down">前月比 -1.2%</div>
+    </div>
+  </div>
+
+  <section class="section">
+    <h2 class="section-title"><span class="tag">1</span> 売上ダッシュボード</h2>
+    <div class="grid-2">
+      <div class="card">
+        <h3>月次売上推移</h3>
+        <div class="desc">直近12ヶ月の売上高（単位：千円）</div>
+        <div class="chart-wrap tall"><canvas id="salesTrendChart"></canvas></div>
+      </div>
+      <div class="card">
+        <h3>チケット種別売上構成</h3>
+        <div class="desc">販売チケット種別ごとの売上シェア</div>
+        <div class="chart-wrap tall"><canvas id="ticketTypeChart"></canvas></div>
+      </div>
+    </div>
+    <div class="grid-2" style="margin-top:16px;">
+      <div class="card">
+        <h3>曜日別売上</h3>
+        <div class="desc">曜日ごとの平均売上</div>
+        <div class="chart-wrap"><canvas id="dowChart"></canvas></div>
+      </div>
+      <div class="card">
+        <h3>時間帯別来店数</h3>
+        <div class="desc">時間帯ごとの来店件数（平均）</div>
+        <div class="chart-wrap"><canvas id="hourChart"></canvas></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2 class="section-title"><span class="tag">2</span> 商圏分析（Googleマップ連携）</h2>
+    <div class="card">
+      <h3>患者分布 × 商圏（半径3km / 5km）</h3>
+      <div class="desc">
+        患者データベースの住所をジオコーディングしてピン表示。
+        チケット購入有無で色分けし、商圏リング（3km・5km）内の集客状況を把握します。
+      </div>
+
+      <div class="map-controls">
+        <label><input type="checkbox" id="toggle3km" checked /> 3km 圏を表示</label>
+        <label><input type="checkbox" id="toggle5km" checked /> 5km 圏を表示</label>
+        <label><input type="checkbox" id="togglePurchased" checked /> チケット購入済み</label>
+        <label><input type="checkbox" id="toggleNotPurchased" checked /> チケット未購入</label>
+      </div>
+
+      <div id="map"></div>
+
+      <div class="map-legend">
+        <span><span class="swatch purchased"></span>チケット購入済み</span>
+        <span><span class="swatch notpurchased"></span>チケット未購入</span>
+        <span><span class="ring r3"></span>3km 商圏</span>
+        <span><span class="ring r5"></span>5km 商圏</span>
+        <span>● ピン中央：店舗所在地</span>
+      </div>
+
+      <div class="radius-summary" id="radiusSummary"></div>
+
+      <div class="note" id="radiusInsight"></div>
+    </div>
+  </section>
+</div>
+<!-- /tab-sales -->
 </main>
 
 <script>
@@ -489,6 +684,295 @@ tbody.innerHTML = rows.map(r => {
     </tr>
   `;
 }).join('');
+
+/* ==========================================================
+ * タブ切り替え
+ * ========================================================== */
+const tabButtons = document.querySelectorAll('.tab');
+const tabPanels = document.querySelectorAll('.tab-panel');
+let salesInitialized = false;
+
+tabButtons.forEach(btn => {
+  btn.addEventListener('click', () => {
+    const target = btn.dataset.tab;
+    tabButtons.forEach(b => b.classList.toggle('active', b === btn));
+    tabPanels.forEach(p => p.classList.toggle('active', p.id === 'tab-' + target));
+    if (target === 'sales' && !salesInitialized) {
+      initSalesTab();
+      salesInitialized = true;
+    } else if (target === 'sales' && window._patientMap) {
+      setTimeout(() => window._patientMap.invalidateSize(), 50);
+    }
+  });
+});
+
+/* ==========================================================
+ * 売上ダッシュボード + 商圏マップ
+ * ========================================================== */
+function initSalesTab() {
+  // 売上トレンド
+  new Chart(document.getElementById('salesTrendChart'), {
+    type: 'line',
+    data: {
+      labels: ['5月','6月','7月','8月','9月','10月','11月','12月','1月','2月','3月','4月'],
+      datasets: [
+        {
+          label: '総売上',
+          data: [14200, 14800, 15600, 15200, 16100, 16800, 17200, 18900, 17500, 17800, 18200, 18420],
+          borderColor: '#3b5bdb',
+          backgroundColor: 'rgba(59,91,219,0.12)',
+          fill: true,
+          tension: 0.3,
+          pointRadius: 3,
+        },
+        {
+          label: 'うちチケット売上',
+          data: [4100, 4300, 4600, 4500, 4800, 5100, 5200, 5800, 5500, 5700, 6000, 6240],
+          borderColor: '#20c997',
+          backgroundColor: 'rgba(32,201,151,0.1)',
+          fill: false,
+          tension: 0.3,
+          pointRadius: 3,
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11 } } },
+        tooltip: { callbacks: { label: c => ` ${c.dataset.label}: ¥${c.parsed.y.toLocaleString()}千` } }
+      },
+      scales: {
+        y: { beginAtZero: true, ticks: { callback: v => '¥' + v.toLocaleString() + '千' } }
+      }
+    }
+  });
+
+  // チケット種別
+  new Chart(document.getElementById('ticketTypeChart'), {
+    type: 'doughnut',
+    data: {
+      labels: ['10回券', '20回券', '月額プラン', '年間パス', '単発'],
+      datasets: [{
+        data: [32, 24, 22, 14, 8],
+        backgroundColor: palette.slice(0, 5),
+        borderWidth: 0,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'right', labels: { boxWidth: 10, font: { size: 11 } } },
+        tooltip: { callbacks: { label: c => ` ${c.label}: ${c.parsed}%` } }
+      }
+    }
+  });
+
+  // 曜日別
+  new Chart(document.getElementById('dowChart'), {
+    type: 'bar',
+    data: {
+      labels: ['月','火','水','木','金','土','日'],
+      datasets: [{
+        label: '平均売上（千円）',
+        data: [480, 520, 495, 540, 610, 780, 720],
+        backgroundColor: '#3b5bdb',
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: { y: { beginAtZero: true, ticks: { callback: v => '¥' + v + '千' } } }
+    }
+  });
+
+  // 時間帯別
+  new Chart(document.getElementById('hourChart'), {
+    type: 'bar',
+    data: {
+      labels: ['9時','10','11','12','13','14','15','16','17','18','19','20'],
+      datasets: [{
+        label: '来店数',
+        data: [8, 18, 24, 16, 12, 20, 26, 30, 34, 28, 22, 12],
+        backgroundColor: '#20c997',
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: { y: { beginAtZero: true, title: { display: true, text: '来店数（件）' } } }
+    }
+  });
+
+  initPatientMap();
+}
+
+/* ==========================================================
+ * 商圏マップ（Leaflet + OpenStreetMap）
+ * Google Maps へ差し替える手順は README コメント参照
+ * ========================================================== */
+const STORE = { lat: 35.6896, lng: 139.7006, name: '新宿本院' }; // 店舗位置
+
+// テスト用の患者データ（実データ接続時は /api/patients 等に差し替え）
+const PATIENTS = generatePatients(60);
+
+function generatePatients(n) {
+  const results = [];
+  const lastNames = ['佐藤','鈴木','高橋','田中','伊藤','渡辺','山本','中村','小林','加藤'];
+  for (let i = 0; i < n; i++) {
+    // 店舗中心から 0.3〜10km の範囲に分布（近いほど多くなるよう重み付け）
+    const r = Math.pow(Math.random(), 1.6) * 10;
+    const theta = Math.random() * 2 * Math.PI;
+    const dLat = (r / 111) * Math.cos(theta);
+    const dLng = (r / (111 * Math.cos(STORE.lat * Math.PI / 180))) * Math.sin(theta);
+    const visitCount = Math.floor(Math.random() * 25) + 1;
+    // 近距離ほど購入率を高く
+    const purchaseProb = Math.max(0.15, 0.85 - r * 0.07);
+    const purchased = Math.random() < purchaseProb;
+    results.push({
+      id: 'P' + String(1000 + i),
+      name: lastNames[i % lastNames.length] + '様',
+      lat: STORE.lat + dLat,
+      lng: STORE.lng + dLng,
+      visitCount,
+      purchased,
+      ticketType: purchased ? ['10回券','20回券','月額プラン','年間パス'][Math.floor(Math.random()*4)] : null,
+    });
+  }
+  return results;
+}
+
+function haversineKm(a, b) {
+  const toRad = d => d * Math.PI / 180;
+  const R = 6371;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const lat1 = toRad(a.lat);
+  const lat2 = toRad(b.lat);
+  const h = Math.sin(dLat/2)**2 + Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLng/2)**2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+function initPatientMap() {
+  const map = L.map('map').setView([STORE.lat, STORE.lng], 12);
+  window._patientMap = map;
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors',
+    maxZoom: 19,
+  }).addTo(map);
+
+  // 店舗マーカー
+  L.marker([STORE.lat, STORE.lng], {
+    icon: L.divIcon({
+      className: '',
+      html: '<div style="background:#1f2937;color:#fff;padding:4px 8px;border-radius:4px;font-size:11px;font-weight:600;white-space:nowrap;box-shadow:0 2px 4px rgba(0,0,0,0.3);">★ ' + STORE.name + '</div>',
+      iconSize: [80, 24],
+      iconAnchor: [40, 12],
+    })
+  }).addTo(map);
+
+  // 商圏円
+  const circle3 = L.circle([STORE.lat, STORE.lng], {
+    radius: 3000,
+    color: '#3b5bdb',
+    weight: 2,
+    fillColor: '#3b5bdb',
+    fillOpacity: 0.08,
+  }).addTo(map);
+  const circle5 = L.circle([STORE.lat, STORE.lng], {
+    radius: 5000,
+    color: '#20c997',
+    weight: 2,
+    fillColor: '#20c997',
+    fillOpacity: 0.06,
+  }).addTo(map);
+
+  // 患者ピン
+  const purchasedLayer = L.layerGroup();
+  const notPurchasedLayer = L.layerGroup();
+
+  PATIENTS.forEach(p => {
+    const distanceKm = haversineKm(STORE, p);
+    const color = p.purchased ? '#16a34a' : '#9ca3af';
+    const marker = L.circleMarker([p.lat, p.lng], {
+      radius: 6 + Math.min(p.visitCount / 5, 4),
+      color: '#ffffff',
+      weight: 1.5,
+      fillColor: color,
+      fillOpacity: 0.9,
+    });
+    marker.bindPopup(`
+      <strong>${p.name}</strong> (${p.id})<br/>
+      距離: ${distanceKm.toFixed(2)} km<br/>
+      来店回数: ${p.visitCount}回<br/>
+      チケット: ${p.purchased ? '<span style="color:#16a34a;font-weight:600;">購入済 (' + p.ticketType + ')</span>' : '<span style="color:#9ca3af;">未購入</span>'}
+    `);
+    if (p.purchased) marker.addTo(purchasedLayer);
+    else marker.addTo(notPurchasedLayer);
+  });
+
+  purchasedLayer.addTo(map);
+  notPurchasedLayer.addTo(map);
+
+  // コントロール
+  document.getElementById('toggle3km').addEventListener('change', e => {
+    e.target.checked ? circle3.addTo(map) : map.removeLayer(circle3);
+  });
+  document.getElementById('toggle5km').addEventListener('change', e => {
+    e.target.checked ? circle5.addTo(map) : map.removeLayer(circle5);
+  });
+  document.getElementById('togglePurchased').addEventListener('change', e => {
+    e.target.checked ? purchasedLayer.addTo(map) : map.removeLayer(purchasedLayer);
+  });
+  document.getElementById('toggleNotPurchased').addEventListener('change', e => {
+    e.target.checked ? notPurchasedLayer.addTo(map) : map.removeLayer(notPurchasedLayer);
+  });
+
+  // 商圏サマリー
+  const buckets = { r3: [], r5: [], out: [] };
+  PATIENTS.forEach(p => {
+    const d = haversineKm(STORE, p);
+    if (d <= 3) buckets.r3.push(p);
+    else if (d <= 5) buckets.r5.push(p);
+    else buckets.out.push(p);
+  });
+  const pctPurchased = arr => arr.length ? Math.round(arr.filter(x => x.purchased).length / arr.length * 100) : 0;
+
+  document.getElementById('radiusSummary').innerHTML = `
+    <div class="radius-card r3">
+      <div class="r-label">〜 3km 圏内</div>
+      <div class="r-count">${buckets.r3.length}<span style="font-size:13px;color:var(--muted);"> 人</span></div>
+      <div class="r-sub">チケット購入率 ${pctPurchased(buckets.r3)}%</div>
+    </div>
+    <div class="radius-card r5">
+      <div class="r-label">3 〜 5km 圏内</div>
+      <div class="r-count">${buckets.r5.length}<span style="font-size:13px;color:var(--muted);"> 人</span></div>
+      <div class="r-sub">チケット購入率 ${pctPurchased(buckets.r5)}%</div>
+    </div>
+    <div class="radius-card rout">
+      <div class="r-label">5km 圏外</div>
+      <div class="r-count">${buckets.out.length}<span style="font-size:13px;color:var(--muted);"> 人</span></div>
+      <div class="r-sub">チケット購入率 ${pctPurchased(buckets.out)}%</div>
+    </div>
+  `;
+
+  // インサイト
+  const total = PATIENTS.length;
+  const r3Share = Math.round(buckets.r3.length / total * 100);
+  const r5Share = Math.round((buckets.r3.length + buckets.r5.length) / total * 100);
+  document.getElementById('radiusInsight').innerHTML = `
+    全 ${total} 人のうち <strong>${r3Share}%</strong> が 3km 圏内、<strong>${r5Share}%</strong> が 5km 圏内から来院しています。
+    近距離圏ほどチケット購入率も高く、<strong>3km 圏内の新規獲得施策（ポスティング・地域連携）</strong>が最も費用対効果が高いと想定されます。
+    5km 圏外から来院する顧客は購入率が低めのため、オンライン導線の強化やリピート促進を検討してください。
+  `;
+}
 </script>
 </body>
 </html>
