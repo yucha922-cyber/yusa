@@ -504,21 +504,38 @@
       <div class="map-controls">
         <label><input type="checkbox" id="toggle3km" checked /> 3km 圏を表示</label>
         <label><input type="checkbox" id="toggle5km" checked /> 5km 圏を表示</label>
-        <label><input type="checkbox" id="togglePurchased" checked /> チケット購入済み</label>
-        <label><input type="checkbox" id="toggleNotPurchased" checked /> チケット未購入</label>
+        <label><input type="checkbox" id="togglePurchased" checked /> 回数券あり</label>
+        <label><input type="checkbox" id="toggleNotPurchased" checked /> 回数券なし</label>
+        <label><input type="checkbox" data-channel="SNS" class="ch-toggle" checked /> SNS</label>
+        <label><input type="checkbox" data-channel="HP" class="ch-toggle" checked /> ホットペッパー</label>
+        <label><input type="checkbox" data-channel="HPB" class="ch-toggle" checked /> HPB</label>
+        <label><input type="checkbox" data-channel="TikTok" class="ch-toggle" checked /> TikTok</label>
+        <label><input type="checkbox" data-channel="紹介" class="ch-toggle" checked /> 紹介</label>
+        <label><input type="checkbox" data-channel="その他" class="ch-toggle" checked /> その他</label>
       </div>
 
       <div id="map"></div>
 
       <div class="map-legend">
-        <span><span class="swatch purchased"></span>チケット購入済み</span>
-        <span><span class="swatch notpurchased"></span>チケット未購入</span>
+        <span><span class="swatch purchased"></span>回数券あり</span>
+        <span><span class="swatch notpurchased"></span>回数券なし</span>
         <span><span class="ring r3"></span>3km 商圏</span>
         <span><span class="ring r5"></span>5km 商圏</span>
-        <span>● ピン中央：店舗所在地</span>
+        <span>★ 店舗所在地（渋谷院）</span>
       </div>
 
       <div class="radius-summary" id="radiusSummary"></div>
+
+      <div class="grid-2" style="margin-top:16px;">
+        <div>
+          <h3 style="margin:0 0 6px;font-size:13px;">来院経路別 構成比</h3>
+          <div class="chart-wrap"><canvas id="channelChart"></canvas></div>
+        </div>
+        <div>
+          <h3 style="margin:0 0 6px;font-size:13px;">経路別 × 回数券購入率</h3>
+          <div class="chart-wrap"><canvas id="channelPurchaseChart"></canvas></div>
+        </div>
+      </div>
 
       <div class="note" id="radiusInsight"></div>
     </div>
@@ -815,38 +832,131 @@ function initSalesTab() {
 
 /* ==========================================================
  * 商圏マップ（Leaflet + OpenStreetMap）
- * Google Maps へ差し替える手順は README コメント参照
+ * データソース: 患者DB シート (B:氏名 / D:住所 / K:診断内容[=来院経路] / Q:回数券)
+ * 実データ接続の手順はファイル末尾の README コメント参照
  * ========================================================== */
-const STORE = { lat: 35.6896, lng: 139.7006, name: '新宿本院' }; // 店舗位置
+const STORE = { lat: 35.6580, lng: 139.7016, name: '渋谷院' }; // 渋谷駅周辺
 
-// テスト用の患者データ（実データ接続時は /api/patients 等に差し替え）
-const PATIENTS = generatePatients(60);
+// シート画像から抽出した患者レコード（403〜443行目のサンプル41件）
+// 形式: [氏名, 住所, K列(診断内容/来院経路), Q列(回数券)]
+const RAW_PATIENTS = [
+  ['ニシハラ リョウ', '東京都目黒区東山3-1-4 ニューリバー東山402', '【SNS2000】', ''],
+  ['ナカセコ ヤスシ', '東京都世田谷区松原3-27-36', '【SNS2000】', ''],
+  ['アライ アキコ', '港区赤坂6-5-25-302', '【HP3500】', '2メンテナンス'],
+  ['ミヤシタ ケイコ', '東京都日野市万願寺4-23-4ジョイパレス603', '【TikTok2000】', 'ディーケア60'],
+  ['ウタハラ マリコ', '調布市小島町2', '【HP3500】', 'AORUプラン'],
+  ['エガミ アキラ', '渋谷区神泉町8-7', '', ''],
+  ['ハシモト メグミ', '静岡県藤枝市高洲55-24', '【HP3500】口コミ', ''],
+  ['カヌカ ミチル', '世田谷区池尻4-29-1-206', '【SNS2000】', ''],
+  ['シモエ エリコ', '渋谷区渋谷1-19-18-614', '【紹介1000】', 'AORUプラン'],
+  ['クワバラ ギョウテン', '東京都武蔵野市吉祥寺本町1-21-8-401', '【SNS2000】', ''],
+  ['オオヤマ ゲン', '世田谷区三宿1-8-22', '【SNS2000】', 'ディーケア60'],
+  ['オオタ ヒロシ', '港区', '【SNS2000】口コミ', ''],
+  ['アンドウ エミ', '東京都渋谷区渋谷1-19-18-2504', '【SNS2000】', ''],
+  ['イタバシ ケイジ', '渋谷区代官山町11-1代官山ハイツ905', '【SNS2000】', ''],
+  ['カミヤ リョウコ', '東京都世田谷区上北沢3-20-7クレール上北沢', '【SNS2000】口コミ', 'ディーケア60'],
+  ['さとう あきら', '神奈川県相模原市緑区太井417-6', '【SNS2000】', ''],
+  ['コウノ マサヤ', '渋谷区笹塚2-27-5-102', '', ''],
+  ['ヒラタ ベニ', '渋谷区富ヶ谷', '【SNS2000】', 'AORUプラン'],
+  ['アダチ ジュンコ', '渋谷区笹塚1-2-8-302', '【SNS2000】口', 'AORUプラン'],
+  ['ナイトウ ハルカ', '東京都渋谷区東1-4-23池田ビル3階', '【紹介2000】', ''],
+  ['マルヤマ ユウコ', '港区南青山6-2-4', '【SNS2000】口コミ', ''],
+  ['ネゴロ カズマ', '世田谷区池尻3-18-10reussite池尻201', '【SNS2000】', ''],
+  ['タカザワ アイコ', '渋谷区渋谷4-4-25', '【HPB3000】口コミ', 'AORUプラン'],
+  ['タガワ アイリ', '渋谷区渋谷1-3-1', '【HPB3000】口コミ', 'AORUプラン'],
+  ['ナガオカ シュウジ', '埼玉県川口市本町3丁目6番19グランクロ', '【TikTok1000】', ''],
+  ['ヤマザキ ミユ', '渋谷区代官山町1-4-603', '【SNS2000】', 'AORUプラン'],
+  ['ヒダカ リュウイチ', '世田谷区用賀1-27-10 201', '【TikTok1000】', ''],
+  ['ハラ ヨウコ', '渋谷区渋谷3-5-1-503', '【SNS2000】口', ''],
+  ['ヒメノ シンタロウ', '渋谷区道玄坂2-18-11-511', '【SNS2000】', 'ディーケア90'],
+  ['トヨダ ラフ', '東京都練馬区上石神井南町13', '【SNS2000】口', ''],
+  ['ナカノ ハジメ', '渋谷区本町2-3-1渋谷本町マンション76', '【SNS2000】口', ''],
+  ['ササヤマ ヒトミ', '渋谷区', '【HPB3000】H', ''],
+  ['ガモウ ヒロミ', '東京都渋谷区幡ヶ谷1-27-5レオパレスプラン', '【SNS2000】', ''],
+  ['タムラ イコ', '南青山5-4-11', '【SNS2000】', ''],
+  ['タカミ タケシ', '渋谷区渋谷2-5-12-1203', '【HP3500】', 'AORUプラン'],
+  ['ユキ ヒロフミ', '横浜市青葉区美しが丘', '【SNS2000】', ''],
+  ['ヤマザキ アツシ', '渋谷区円山町12-2', '【SNS2000】', ''],
+  ['カナイ ホクト', '東京都杉並区浜田山2-20-6', '【紹介3500】', 'AORUプラン'],
+  ['ツダ ナツキ', '東京都渋谷区神宮前1-3-6-716', '【SNS2000】', 'AORUプラン'],
+  ['オネヤマ サヤカ', '渋谷区上原3-31-22', '【SNS2000】', ''],
+  ['フクムラ マユミ', '和歌山県新宮市佐野979-2', '【SNS2000】', ''],
+];
 
-function generatePatients(n) {
-  const results = [];
-  const lastNames = ['佐藤','鈴木','高橋','田中','伊藤','渡辺','山本','中村','小林','加藤'];
-  for (let i = 0; i < n; i++) {
-    // 店舗中心から 0.3〜10km の範囲に分布（近いほど多くなるよう重み付け）
-    const r = Math.pow(Math.random(), 1.6) * 10;
-    const theta = Math.random() * 2 * Math.PI;
-    const dLat = (r / 111) * Math.cos(theta);
-    const dLng = (r / (111 * Math.cos(STORE.lat * Math.PI / 180))) * Math.sin(theta);
-    const visitCount = Math.floor(Math.random() * 25) + 1;
-    // 近距離ほど購入率を高く
-    const purchaseProb = Math.max(0.15, 0.85 - r * 0.07);
-    const purchased = Math.random() < purchaseProb;
-    results.push({
-      id: 'P' + String(1000 + i),
-      name: lastNames[i % lastNames.length] + '様',
-      lat: STORE.lat + dLat,
-      lng: STORE.lng + dLng,
-      visitCount,
-      purchased,
-      ticketType: purchased ? ['10回券','20回券','月額プラン','年間パス'][Math.floor(Math.random()*4)] : null,
-    });
+// 地名→概算座標（デモ用のローカル擬似ジオコーダー。実運用では Google Geocoding API を使用）
+const AREA_COORDS = {
+  '渋谷区神泉':[35.6563,139.6921], '渋谷区道玄坂':[35.6578,139.6965], '渋谷区円山':[35.6590,139.6950],
+  '渋谷区渋谷':[35.6580,139.7016], '渋谷区東':[35.6520,139.7100], '渋谷区代官山':[35.6495,139.7030],
+  '渋谷区富ヶ谷':[35.6701,139.6928], '渋谷区神宮前':[35.6722,139.7046], '渋谷区上原':[35.6706,139.6860],
+  '渋谷区本町':[35.6799,139.6833], '渋谷区幡ヶ谷':[35.6763,139.6793], '渋谷区笹塚':[35.6776,139.6693],
+  '渋谷区':[35.6580,139.7016],
+  '目黒区東山':[35.6495,139.6872], '目黒区':[35.6330,139.7150],
+  '世田谷区松原':[35.6645,139.6496], '世田谷区池尻':[35.6497,139.6850],
+  '世田谷区三宿':[35.6484,139.6780], '世田谷区上北沢':[35.6679,139.6250],
+  '世田谷区用賀':[35.6308,139.6348], '世田谷区':[35.6464,139.6530],
+  '港区赤坂':[35.6736,139.7369], '港区南青山':[35.6669,139.7185],
+  '南青山':[35.6669,139.7185], '港区':[35.6581,139.7515],
+  '杉並区浜田山':[35.6803,139.6404], '杉並区':[35.6994,139.6364],
+  '練馬区上石神井':[35.7350,139.5900], '練馬区':[35.7357,139.6518],
+  '武蔵野市吉祥寺':[35.7056,139.5797], '武蔵野市':[35.7180,139.5664],
+  '日野市万願寺':[35.6667,139.3950], '日野市':[35.6719,139.3952],
+  '調布市小島':[35.6517,139.5420], '調布市':[35.6508,139.5418],
+  '静岡県藤枝市':[34.8669,138.2578],
+  '神奈川県相模原市':[35.6080,139.2930],
+  '埼玉県川口市':[35.8018,139.7248],
+  '横浜市青葉区':[35.5642,139.5430], '横浜市':[35.4437,139.6380],
+  '和歌山県新宮市':[33.7140,135.9854],
+};
+
+function approximateCoords(address) {
+  for (const key of Object.keys(AREA_COORDS).sort((a,b) => b.length - a.length)) {
+    if (address.includes(key)) {
+      const [lat, lng] = AREA_COORDS[key];
+      // 同エリア内で重ならないよう微小なランダムオフセット
+      return [lat + (Math.random() - 0.5) * 0.004, lng + (Math.random() - 0.5) * 0.004];
+    }
   }
-  return results;
+  return [STORE.lat + (Math.random() - 0.5) * 0.02, STORE.lng + (Math.random() - 0.5) * 0.02];
 }
+
+// K列の文字列から来院経路を抽出
+function parseChannel(k) {
+  if (!k) return 'その他';
+  if (k.includes('紹介')) return '紹介';
+  if (/tiktok/i.test(k)) return 'TikTok';
+  if (k.includes('HPB') || k.includes('PB3')) return 'HPB';
+  if (k.includes('HP')) return 'HP';
+  if (k.includes('SNS')) return 'SNS';
+  return 'その他';
+}
+
+const CHANNEL_COLORS = {
+  'SNS': '#3b5bdb',
+  'HP':  '#f59e0b',
+  'HPB': '#e64980',
+  'TikTok': '#7048e8',
+  '紹介': '#20c997',
+  'その他': '#9ca3af',
+};
+const CHANNEL_LABELS = {
+  'SNS': 'SNS', 'HP': 'ホットペッパー', 'HPB': 'HPB',
+  'TikTok': 'TikTok', '紹介': '紹介', 'その他': 'その他',
+};
+
+const PATIENTS = RAW_PATIENTS.map(([name, address, k, q], i) => {
+  const [lat, lng] = approximateCoords(address);
+  return {
+    id: 'P' + String(403 + i),
+    name,
+    address,
+    lat,
+    lng,
+    channelCode: k,
+    channel: parseChannel(k),
+    purchased: Boolean(q && q.trim()),
+    ticketType: q && q.trim() ? q.trim() : null,
+  };
+});
 
 function haversineKm(a, b) {
   const toRad = d => d * Math.PI / 180;
@@ -894,32 +1004,48 @@ function initPatientMap() {
     fillOpacity: 0.06,
   }).addTo(map);
 
-  // 患者ピン
-  const purchasedLayer = L.layerGroup();
-  const notPurchasedLayer = L.layerGroup();
-
+  // 患者ピン：内部色=回数券, 外枠色=来院経路
+  const patientMarkers = [];
   PATIENTS.forEach(p => {
     const distanceKm = haversineKm(STORE, p);
-    const color = p.purchased ? '#16a34a' : '#9ca3af';
+    const fill = p.purchased ? '#16a34a' : '#9ca3af';
+    const ring = CHANNEL_COLORS[p.channel];
     const marker = L.circleMarker([p.lat, p.lng], {
-      radius: 6 + Math.min(p.visitCount / 5, 4),
-      color: '#ffffff',
-      weight: 1.5,
-      fillColor: color,
-      fillOpacity: 0.9,
+      radius: 8,
+      color: ring,
+      weight: 3,
+      fillColor: fill,
+      fillOpacity: 0.92,
     });
     marker.bindPopup(`
       <strong>${p.name}</strong> (${p.id})<br/>
+      住所: ${p.address}<br/>
       距離: ${distanceKm.toFixed(2)} km<br/>
-      来店回数: ${p.visitCount}回<br/>
-      チケット: ${p.purchased ? '<span style="color:#16a34a;font-weight:600;">購入済 (' + p.ticketType + ')</span>' : '<span style="color:#9ca3af;">未購入</span>'}
+      来院経路: <span style="color:${ring};font-weight:600;">${CHANNEL_LABELS[p.channel]}</span>
+        <span style="color:var(--muted);font-size:11px;">(${p.channelCode || '未記入'})</span><br/>
+      回数券: ${p.purchased
+        ? '<span style="color:#16a34a;font-weight:600;">あり (' + p.ticketType + ')</span>'
+        : '<span style="color:#9ca3af;">なし</span>'}
     `);
-    if (p.purchased) marker.addTo(purchasedLayer);
-    else marker.addTo(notPurchasedLayer);
+    marker.addTo(map);
+    patientMarkers.push({ marker, patient: p });
   });
 
-  purchasedLayer.addTo(map);
-  notPurchasedLayer.addTo(map);
+  function applyFilters() {
+    const showPurchased = document.getElementById('togglePurchased').checked;
+    const showNotPurchased = document.getElementById('toggleNotPurchased').checked;
+    const activeChannels = new Set(
+      Array.from(document.querySelectorAll('.ch-toggle'))
+        .filter(cb => cb.checked)
+        .map(cb => cb.dataset.channel)
+    );
+    patientMarkers.forEach(({ marker, patient }) => {
+      const okTicket = patient.purchased ? showPurchased : showNotPurchased;
+      const okChannel = activeChannels.has(patient.channel);
+      if (okTicket && okChannel) marker.addTo(map);
+      else map.removeLayer(marker);
+    });
+  }
 
   // コントロール
   document.getElementById('toggle3km').addEventListener('change', e => {
@@ -928,12 +1054,9 @@ function initPatientMap() {
   document.getElementById('toggle5km').addEventListener('change', e => {
     e.target.checked ? circle5.addTo(map) : map.removeLayer(circle5);
   });
-  document.getElementById('togglePurchased').addEventListener('change', e => {
-    e.target.checked ? purchasedLayer.addTo(map) : map.removeLayer(purchasedLayer);
-  });
-  document.getElementById('toggleNotPurchased').addEventListener('change', e => {
-    e.target.checked ? notPurchasedLayer.addTo(map) : map.removeLayer(notPurchasedLayer);
-  });
+  document.getElementById('togglePurchased').addEventListener('change', applyFilters);
+  document.getElementById('toggleNotPurchased').addEventListener('change', applyFilters);
+  document.querySelectorAll('.ch-toggle').forEach(cb => cb.addEventListener('change', applyFilters));
 
   // 商圏サマリー
   const buckets = { r3: [], r5: [], out: [] };
@@ -963,14 +1086,67 @@ function initPatientMap() {
     </div>
   `;
 
+  // 来院経路の集計
+  const channelOrder = ['SNS', 'HP', 'HPB', 'TikTok', '紹介', 'その他'];
+  const channelCount = Object.fromEntries(channelOrder.map(c => [c, 0]));
+  const channelPurchased = Object.fromEntries(channelOrder.map(c => [c, 0]));
+  PATIENTS.forEach(p => {
+    channelCount[p.channel]++;
+    if (p.purchased) channelPurchased[p.channel]++;
+  });
+  const channelLabels = channelOrder.map(c => CHANNEL_LABELS[c]);
+  const channelColorsArr = channelOrder.map(c => CHANNEL_COLORS[c]);
+
+  new Chart(document.getElementById('channelChart'), {
+    type: 'doughnut',
+    data: {
+      labels: channelLabels,
+      datasets: [{ data: channelOrder.map(c => channelCount[c]), backgroundColor: channelColorsArr, borderWidth: 0 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'right', labels: { boxWidth: 10, font: { size: 11 } } },
+        tooltip: { callbacks: { label: c => ` ${c.label}: ${c.parsed}人` } }
+      }
+    }
+  });
+
+  new Chart(document.getElementById('channelPurchaseChart'), {
+    type: 'bar',
+    data: {
+      labels: channelLabels,
+      datasets: [{
+        label: '回数券購入率 (%)',
+        data: channelOrder.map(c => channelCount[c] ? Math.round(channelPurchased[c] / channelCount[c] * 100) : 0),
+        backgroundColor: channelColorsArr,
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: { y: { beginAtZero: true, max: 100, ticks: { callback: v => v + '%' } } }
+    }
+  });
+
   // インサイト
   const total = PATIENTS.length;
   const r3Share = Math.round(buckets.r3.length / total * 100);
   const r5Share = Math.round((buckets.r3.length + buckets.r5.length) / total * 100);
+  const topChannel = channelOrder
+    .filter(c => channelCount[c] > 0)
+    .sort((a, b) => channelCount[b] - channelCount[a])[0];
+  const topRateChannel = channelOrder
+    .filter(c => channelCount[c] >= 3)
+    .sort((a, b) => (channelPurchased[b]/channelCount[b]) - (channelPurchased[a]/channelCount[a]))[0];
+
   document.getElementById('radiusInsight').innerHTML = `
-    全 ${total} 人のうち <strong>${r3Share}%</strong> が 3km 圏内、<strong>${r5Share}%</strong> が 5km 圏内から来院しています。
-    近距離圏ほどチケット購入率も高く、<strong>3km 圏内の新規獲得施策（ポスティング・地域連携）</strong>が最も費用対効果が高いと想定されます。
-    5km 圏外から来院する顧客は購入率が低めのため、オンライン導線の強化やリピート促進を検討してください。
+    全 ${total} 人のうち <strong>${r3Share}%</strong> が 3km 圏内、<strong>${r5Share}%</strong> が 5km 圏内から来院しています（渋谷院）。
+    最多流入経路は <strong>${CHANNEL_LABELS[topChannel]}</strong>（${channelCount[topChannel]}人）で、
+    回数券購入率が最も高い経路は <strong>${CHANNEL_LABELS[topRateChannel]}</strong>
+    （${Math.round(channelPurchased[topRateChannel]/channelCount[topRateChannel]*100)}%）です。
+    3km 圏内の購入率が高ければポスティング等の地域施策、経路別の購入率差があればその経路への広告投資を優先すると費用対効果が高まります。
   `;
 }
 </script>
