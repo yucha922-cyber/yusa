@@ -1,1 +1,494 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>顧客分析ダッシュボード | デモ</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #f4f6fb;
+    --surface: #ffffff;
+    --border: #e5e9f2;
+    --text: #1f2937;
+    --muted: #6b7280;
+    --primary: #3b5bdb;
+    --primary-soft: #e7ecfd;
+    --success: #16a34a;
+    --danger: #dc2626;
+    --warning: #d97706;
+    --chart-1: #3b5bdb;
+    --chart-2: #20c997;
+    --chart-3: #f59e0b;
+    --chart-4: #e03131;
+    --chart-5: #7048e8;
+    --chart-6: #15aabf;
+    --chart-7: #fa5252;
+    --chart-8: #82c91e;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Hiragino Sans", "Noto Sans JP", "Yu Gothic UI", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.55;
+  }
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 20px 32px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  header h1 {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 600;
+  }
+  header .sub {
+    color: var(--muted);
+    font-size: 13px;
+    margin-top: 2px;
+  }
+  .filters {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .filters select,
+  .filters button {
+    padding: 8px 12px;
+    font-size: 13px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: #fff;
+    color: var(--text);
+    cursor: pointer;
+  }
+  .filters button.primary {
+    background: var(--primary);
+    color: #fff;
+    border-color: var(--primary);
+  }
+  main {
+    padding: 24px 32px 48px;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+  .kpi {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 20px;
+  }
+  .kpi .label {
+    color: var(--muted);
+    font-size: 12px;
+    margin-bottom: 6px;
+  }
+  .kpi .value {
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+  }
+  .kpi .delta {
+    margin-top: 4px;
+    font-size: 12px;
+  }
+  .delta.up { color: var(--success); }
+  .delta.down { color: var(--danger); }
 
+  .section {
+    margin-bottom: 28px;
+  }
+  .section-title {
+    font-size: 15px;
+    font-weight: 600;
+    margin: 0 0 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .section-title .tag {
+    background: var(--primary-soft);
+    color: var(--primary);
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 4px;
+  }
+  .grid-3 {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 16px;
+  }
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 20px;
+  }
+  .card h3 {
+    margin: 0 0 4px;
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .card .desc {
+    color: var(--muted);
+    font-size: 12px;
+    margin-bottom: 12px;
+  }
+  .chart-wrap {
+    position: relative;
+    height: 260px;
+  }
+  .chart-wrap.tall {
+    height: 320px;
+  }
+  .legend-note {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 10px;
+  }
+  table.profile {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  table.profile th,
+  table.profile td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+  }
+  table.profile th {
+    background: #fafbff;
+    font-weight: 600;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .bar-inline {
+    display: inline-block;
+    height: 8px;
+    border-radius: 4px;
+    background: var(--primary);
+    vertical-align: middle;
+    margin-right: 8px;
+  }
+  .bar-inline.danger { background: var(--danger); }
+  .chip {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .chip.join { background: #dcfce7; color: #166534; }
+  .chip.churn { background: #fee2e2; color: #991b1b; }
+  .note {
+    font-size: 12px;
+    color: var(--muted);
+    background: #f9fafb;
+    border-left: 3px solid var(--primary);
+    padding: 10px 14px;
+    border-radius: 4px;
+    margin-top: 12px;
+  }
+  @media (max-width: 1000px) {
+    .grid-3 { grid-template-columns: 1fr 1fr; }
+    .kpi-grid { grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 640px) {
+    .grid-3, .grid-2 { grid-template-columns: 1fr; }
+    .kpi-grid { grid-template-columns: 1fr 1fr; }
+    main { padding: 16px; }
+    header { padding: 16px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>顧客分析ダッシュボード</h1>
+    <div class="sub">属性情報とユーザー行動から、入会・初回離反の傾向を把握します</div>
+  </div>
+  <div class="filters">
+    <select>
+      <option>直近3ヶ月</option>
+      <option>直近6ヶ月</option>
+      <option selected>直近12ヶ月</option>
+      <option>全期間</option>
+    </select>
+    <select>
+      <option selected>全店舗</option>
+      <option>新宿店</option>
+      <option>渋谷店</option>
+      <option>池袋店</option>
+    </select>
+    <button class="primary">更新</button>
+  </div>
+</header>
+
+<main>
+  <!-- KPI -->
+  <div class="kpi-grid">
+    <div class="kpi">
+      <div class="label">総会員数</div>
+      <div class="value">12,480</div>
+      <div class="delta up">前月比 +3.2%</div>
+    </div>
+    <div class="kpi">
+      <div class="label">新規入会数（当月）</div>
+      <div class="value">612</div>
+      <div class="delta up">前月比 +8.1%</div>
+    </div>
+    <div class="kpi">
+      <div class="label">初回離反率</div>
+      <div class="value">18.4%</div>
+      <div class="delta down">前月比 +1.6pt</div>
+    </div>
+    <div class="kpi">
+      <div class="label">アクティブ率（月1回以上）</div>
+      <div class="value">64.7%</div>
+      <div class="delta up">前月比 +0.8pt</div>
+    </div>
+  </div>
+
+  <!-- Section 1 -->
+  <section class="section">
+    <h2 class="section-title"><span class="tag">1</span> 属性情報</h2>
+    <div class="grid-3">
+      <div class="card">
+        <h3>(a) エリア分布</h3>
+        <div class="desc">会員の居住・来店エリアの内訳</div>
+        <div class="chart-wrap"><canvas id="areaChart"></canvas></div>
+      </div>
+      <div class="card">
+        <h3>(b) 年齢層</h3>
+        <div class="desc">会員の年齢構成比</div>
+        <div class="chart-wrap"><canvas id="ageChart"></canvas></div>
+      </div>
+      <div class="card">
+        <h3>(c) 職業</h3>
+        <div class="desc">会員の職業別割合</div>
+        <div class="chart-wrap"><canvas id="jobChart"></canvas></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section 2 -->
+  <section class="section">
+    <h2 class="section-title"><span class="tag">2</span> ユーザー行動</h2>
+    <div class="grid-2">
+      <div class="card">
+        <h3>(a) 入会者プロファイル</h3>
+        <div class="desc">直近3ヶ月に入会した会員の属性分布</div>
+        <div class="chart-wrap tall"><canvas id="joinChart"></canvas></div>
+        <div class="legend-note">※ 全会員比と比較して「どの層が増えているか」を確認</div>
+      </div>
+      <div class="card">
+        <h3>(b) 初回離反者プロファイル</h3>
+        <div class="desc">初回来店のみで離反した会員の属性分布</div>
+        <div class="chart-wrap tall"><canvas id="churnChart"></canvas></div>
+        <div class="legend-note">※ 全会員比と比較して「どの層が離れやすいか」を確認</div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px;">
+      <h3>属性別 入会 vs 初回離反</h3>
+      <div class="desc">セグメントごとの入会率と初回離反率を比較し、重点的にアプローチすべき層を特定</div>
+      <table class="profile">
+        <thead>
+          <tr>
+            <th>セグメント</th>
+            <th>構成比</th>
+            <th>入会率</th>
+            <th>初回離反率</th>
+            <th>傾向</th>
+          </tr>
+        </thead>
+        <tbody id="profileTable"></tbody>
+      </table>
+      <div class="note">
+        初回離反率が全体平均（18.4%）を大きく上回る「50代・会社員・郊外エリア」は、初回来店後のフォロー施策を重点化すべき層です。
+        一方で「20代・学生・都心エリア」は入会率が高く、リテンション施策の強化で会員基盤の成長が期待できます。
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+Chart.defaults.font.family = '"Hiragino Sans", "Noto Sans JP", "Yu Gothic UI", sans-serif';
+Chart.defaults.font.size = 12;
+Chart.defaults.color = '#374151';
+
+const palette = ['#3b5bdb', '#20c997', '#f59e0b', '#e03131', '#7048e8', '#15aabf', '#fa5252', '#82c91e'];
+
+// 1(a) エリア
+new Chart(document.getElementById('areaChart'), {
+  type: 'doughnut',
+  data: {
+    labels: ['都心3区', '城南', '城西', '城東', '城北', '神奈川', '埼玉', 'その他'],
+    datasets: [{
+      data: [28, 18, 15, 12, 9, 8, 6, 4],
+      backgroundColor: palette,
+      borderWidth: 0,
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { position: 'right', labels: { boxWidth: 10, font: { size: 11 } } },
+      tooltip: { callbacks: { label: c => ` ${c.label}: ${c.parsed}%` } }
+    }
+  }
+});
+
+// 1(b) 年齢層
+new Chart(document.getElementById('ageChart'), {
+  type: 'bar',
+  data: {
+    labels: ['〜19', '20代', '30代', '40代', '50代', '60代〜'],
+    datasets: [{
+      label: '会員数構成比 (%)',
+      data: [4, 26, 31, 20, 13, 6],
+      backgroundColor: '#3b5bdb',
+      borderRadius: 4,
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      y: { beginAtZero: true, ticks: { callback: v => v + '%' } }
+    }
+  }
+});
+
+// 1(c) 職業
+new Chart(document.getElementById('jobChart'), {
+  type: 'bar',
+  data: {
+    labels: ['会社員', '公務員', '自営業', '主婦/主夫', '学生', 'パート', '無職/その他'],
+    datasets: [{
+      label: '構成比 (%)',
+      data: [42, 8, 10, 14, 12, 9, 5],
+      backgroundColor: '#20c997',
+      borderRadius: 4,
+    }]
+  },
+  options: {
+    indexAxis: 'y',
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { beginAtZero: true, ticks: { callback: v => v + '%' } }
+    }
+  }
+});
+
+// 2(a) 入会者プロファイル（年齢 × 職業の積み上げ）
+new Chart(document.getElementById('joinChart'), {
+  type: 'bar',
+  data: {
+    labels: ['20代', '30代', '40代', '50代', '60代〜'],
+    datasets: [
+      { label: '会社員', data: [18, 22, 14, 6, 2], backgroundColor: palette[0] },
+      { label: '学生',  data: [14, 1, 0, 0, 0],   backgroundColor: palette[1] },
+      { label: '主婦/主夫', data: [2, 6, 5, 3, 2], backgroundColor: palette[2] },
+      { label: '自営業', data: [3, 5, 4, 3, 1],   backgroundColor: palette[3] },
+      { label: 'その他', data: [4, 4, 3, 2, 2],   backgroundColor: palette[4] },
+    ]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11 } } },
+      tooltip: { mode: 'index' }
+    },
+    scales: {
+      x: { stacked: true },
+      y: { stacked: true, beginAtZero: true, title: { display: true, text: '新規入会数（人）' } }
+    }
+  }
+});
+
+// 2(b) 初回離反者プロファイル
+new Chart(document.getElementById('churnChart'), {
+  type: 'bar',
+  data: {
+    labels: ['20代', '30代', '40代', '50代', '60代〜'],
+    datasets: [
+      { label: '会社員', data: [4, 6, 8, 12, 6], backgroundColor: palette[0] },
+      { label: '学生',  data: [6, 0, 0, 0, 0],  backgroundColor: palette[1] },
+      { label: '主婦/主夫', data: [1, 2, 3, 5, 4], backgroundColor: palette[2] },
+      { label: '自営業', data: [1, 2, 3, 4, 3],  backgroundColor: palette[3] },
+      { label: 'その他', data: [2, 2, 3, 4, 3],  backgroundColor: palette[4] },
+    ]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11 } } },
+      tooltip: { mode: 'index' }
+    },
+    scales: {
+      x: { stacked: true },
+      y: { stacked: true, beginAtZero: true, title: { display: true, text: '初回離反者数（人）' } }
+    }
+  }
+});
+
+// プロファイル比較テーブル
+const rows = [
+  { seg: '20代 / 学生 / 都心',      share: 9,  join: 24.3, churn: 22.1, trend: '入会多・離反も高' },
+  { seg: '20代 / 会社員 / 都心',    share: 12, join: 19.8, churn: 11.2, trend: '獲得好調の優良層' },
+  { seg: '30代 / 会社員 / 城南西',  share: 15, join: 17.2, churn: 9.8,  trend: '安定した中核層' },
+  { seg: '30代 / 主婦主夫 / 郊外',  share: 7,  join: 10.1, churn: 14.5, trend: '育成余地あり' },
+  { seg: '40代 / 会社員 / 郊外',    share: 11, join: 8.4,  churn: 17.6, trend: 'フォロー必要' },
+  { seg: '50代 / 会社員 / 郊外',    share: 8,  join: 5.2,  churn: 28.9, trend: '要改善・重点層' },
+  { seg: '60代〜 / 主婦主夫 / 郊外',share: 5,  join: 3.1,  churn: 26.4, trend: '要改善' },
+];
+const avgChurn = 18.4;
+const tbody = document.getElementById('profileTable');
+tbody.innerHTML = rows.map(r => {
+  const isHighChurn = r.churn >= avgChurn + 3;
+  const isHighJoin = r.join >= 18;
+  const chip = isHighChurn
+    ? '<span class="chip churn">離反注意</span>'
+    : isHighJoin
+      ? '<span class="chip join">獲得好調</span>'
+      : '';
+  return `
+    <tr>
+      <td><strong>${r.seg}</strong> ${chip}</td>
+      <td>${r.share}%</td>
+      <td><span class="bar-inline" style="width:${r.join * 3}px"></span>${r.join}%</td>
+      <td><span class="bar-inline danger" style="width:${r.churn * 2}px"></span>${r.churn}%</td>
+      <td>${r.trend}</td>
+    </tr>
+  `;
+}).join('');
+</script>
+</body>
+</html>
