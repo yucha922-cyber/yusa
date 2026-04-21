@@ -309,6 +309,107 @@
   .radius-card.r5 { border-left: 4px solid #20c997; }
   .radius-card.rout { border-left: 4px solid #9ca3af; }
   .leaflet-popup-content { font-family: inherit; font-size: 12px; }
+  .therapist-card {
+    position: relative;
+    overflow: hidden;
+  }
+  .therapist-card.yusa  { border-left: 4px solid #3b5bdb; }
+  .therapist-card.shoko { border-left: 4px solid #e64980; }
+  .therapist-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+  .therapist-avatar {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-weight: 700;
+    font-size: 18px;
+    flex-shrink: 0;
+  }
+  .therapist-avatar.yusa  { background: #3b5bdb; }
+  .therapist-avatar.shoko { background: #e64980; }
+  .therapist-header .name {
+    font-size: 16px;
+    font-weight: 700;
+  }
+  .therapist-header .role {
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .therapist-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .therapist-stats .stat {
+    background: #f9fafb;
+    border-radius: 6px;
+    padding: 10px;
+    text-align: center;
+  }
+  .therapist-stats .stat .v {
+    font-size: 20px;
+    font-weight: 700;
+    line-height: 1;
+  }
+  .therapist-stats .stat .l {
+    font-size: 10px;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+  .therapist-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: 12px;
+  }
+  .therapist-list li {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .therapist-list li:last-child { border-bottom: none; }
+  .therapist-list .bar {
+    display: inline-block;
+    height: 6px;
+    border-radius: 3px;
+    vertical-align: middle;
+    margin-right: 6px;
+  }
+  .therapist-subtitle {
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin: 14px 0 6px;
+    font-weight: 600;
+  }
+  .therapist-chart-wrap {
+    position: relative;
+    height: 160px;
+    margin-top: 8px;
+  }
+  .therapist-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 700;
+    color: #fff;
+  }
+  .therapist-badge.yusa  { background: #3b5bdb; }
+  .therapist-badge.shoko { background: #e64980; }
   @media (max-width: 1000px) {
     .grid-3 { grid-template-columns: 1fr 1fr; }
     .kpi-grid { grid-template-columns: 1fr 1fr; }
@@ -436,6 +537,11 @@
       </div>
     </div>
   </section>
+
+  <section class="section">
+    <h2 class="section-title"><span class="tag">★</span> セラピスト別 担当サマリー</h2>
+    <div class="grid-2" id="therapistCardsCustomer"></div>
+  </section>
 </div>
 <!-- /tab-customer -->
 
@@ -463,6 +569,11 @@
       <div class="delta down">前月比 -1.2%</div>
     </div>
   </div>
+
+  <section class="section">
+    <h2 class="section-title"><span class="tag">★</span> セラピスト別 パフォーマンス</h2>
+    <div class="grid-2" id="therapistCardsSales"></div>
+  </section>
 
   <section class="section">
     <h2 class="section-title"><span class="tag">1</span> 売上ダッシュボード</h2>
@@ -506,6 +617,8 @@
         <label><input type="checkbox" id="toggle5km" checked /> 5km 圏を表示</label>
         <label><input type="checkbox" id="togglePurchased" checked /> 回数券あり</label>
         <label><input type="checkbox" id="toggleNotPurchased" checked /> 回数券なし</label>
+        <label style="background:#e7ecfd;border-color:#3b5bdb;"><input type="checkbox" data-therapist="Yusa" class="th-toggle" checked /> <strong style="color:#3b5bdb;">ユサ担当</strong></label>
+        <label style="background:#fdeaf3;border-color:#e64980;"><input type="checkbox" data-therapist="Shoko" class="th-toggle" checked /> <strong style="color:#e64980;">ショウコ担当</strong></label>
         <label><input type="checkbox" data-channel="SNS" class="ch-toggle" checked /> SNS</label>
         <label><input type="checkbox" data-channel="HP" class="ch-toggle" checked /> ホットペッパー</label>
         <label><input type="checkbox" data-channel="HPB" class="ch-toggle" checked /> HPB</label>
@@ -827,7 +940,137 @@ function initSalesTab() {
     }
   });
 
+  renderTherapistCards('therapistCardsSales');
   initPatientMap();
+}
+
+/* ==========================================================
+ * セラピスト別サマリーカード
+ * ========================================================== */
+function renderTherapistCards(containerId) {
+  const container = document.getElementById(containerId);
+  if (!container || container.dataset.rendered === '1') return;
+  container.dataset.rendered = '1';
+
+  // チケット単価（mock）
+  const TICKET_PRICE = {
+    'AORUプラン': 120000,
+    'ディーケア60': 88000,
+    'ディーケア90': 132000,
+    '2メンテナンス': 44000,
+  };
+  const avgRevenuePerPurchase = 95000;
+
+  const stats = {};
+  THERAPISTS.forEach(t => {
+    const list = PATIENTS.filter(p => p.therapist === t);
+    const purchased = list.filter(p => p.purchased);
+    const channelCount = {};
+    const areaCount = {};
+    const distances = list.map(p => haversineKm(STORE, p));
+    list.forEach(p => {
+      channelCount[p.channel] = (channelCount[p.channel] || 0) + 1;
+      const area = extractArea(p.address);
+      areaCount[area] = (areaCount[area] || 0) + 1;
+    });
+    const revenue = purchased.reduce((sum, p) =>
+      sum + (TICKET_PRICE[p.ticketType] || avgRevenuePerPurchase), 0);
+
+    stats[t] = {
+      total: list.length,
+      purchased: purchased.length,
+      rate: list.length ? Math.round(purchased.length / list.length * 100) : 0,
+      channelCount,
+      areaCount,
+      avgDistance: distances.length ? distances.reduce((a,b)=>a+b,0) / distances.length : 0,
+      revenue,
+    };
+  });
+
+  // 比較用の最大値
+  const maxCount = Math.max(...THERAPISTS.map(t => stats[t].total), 1);
+  const maxChannel = Math.max(
+    ...THERAPISTS.flatMap(t => Object.values(stats[t].channelCount)), 1
+  );
+
+  container.innerHTML = THERAPISTS.map(t => {
+    const meta = THERAPIST_META[t];
+    const s = stats[t];
+    const key = t.toLowerCase();
+    const topChannels = Object.entries(s.channelCount)
+      .sort((a, b) => b[1] - a[1]).slice(0, 4);
+    const topAreas = Object.entries(s.areaCount)
+      .sort((a, b) => b[1] - a[1]).slice(0, 4);
+    return `
+      <div class="card therapist-card ${key}">
+        <div class="therapist-header">
+          <div class="therapist-avatar ${key}">${meta.initial}</div>
+          <div>
+            <div class="name">${meta.label}</div>
+            <div class="role">担当セラピスト</div>
+          </div>
+        </div>
+        <div class="therapist-stats">
+          <div class="stat">
+            <div class="v" style="color:${meta.color};">${s.total}</div>
+            <div class="l">担当患者数</div>
+          </div>
+          <div class="stat">
+            <div class="v" style="color:#16a34a;">${s.purchased}</div>
+            <div class="l">回数券獲得</div>
+          </div>
+          <div class="stat">
+            <div class="v">${s.rate}<span style="font-size:12px;">%</span></div>
+            <div class="l">獲得率</div>
+          </div>
+        </div>
+        <div class="therapist-stats">
+          <div class="stat">
+            <div class="v" style="font-size:16px;">¥${s.revenue.toLocaleString()}</div>
+            <div class="l">推定売上貢献</div>
+          </div>
+          <div class="stat">
+            <div class="v" style="font-size:16px;">${s.avgDistance.toFixed(1)}km</div>
+            <div class="l">平均来院距離</div>
+          </div>
+          <div class="stat">
+            <div class="v" style="font-size:16px;">${Math.round(s.total / maxCount * 100)}<span style="font-size:12px;">%</span></div>
+            <div class="l">担当比率</div>
+          </div>
+        </div>
+
+        <div class="therapist-subtitle">主要来院経路</div>
+        <ul class="therapist-list">
+          ${topChannels.map(([ch, n]) => `
+            <li>
+              <span>
+                <span class="bar" style="background:${CHANNEL_COLORS[ch]};width:${(n/maxChannel)*60+8}px;"></span>
+                ${CHANNEL_LABELS[ch]}
+              </span>
+              <span><strong>${n}</strong> 人</span>
+            </li>
+          `).join('')}
+        </ul>
+
+        <div class="therapist-subtitle">主要担当エリア</div>
+        <ul class="therapist-list">
+          ${topAreas.map(([area, n]) => `
+            <li>
+              <span>${area || '不明'}</span>
+              <span><strong>${n}</strong> 人</span>
+            </li>
+          `).join('')}
+        </ul>
+      </div>
+    `;
+  }).join('');
+}
+
+function extractArea(address) {
+  if (!address) return '不明';
+  const m = address.match(/([^都道府県]*?[区市町村])/);
+  if (m) return m[1].replace(/^東京|^神奈川県|^埼玉県|^静岡県|^和歌山県/, '');
+  return address.slice(0, 6);
 }
 
 /* ==========================================================
@@ -838,49 +1081,49 @@ function initSalesTab() {
 const STORE = { lat: 35.6580, lng: 139.7016, name: '渋谷院' }; // 渋谷駅周辺
 
 // シート画像から抽出した患者レコード（403〜443行目のサンプル41件）
-// 形式: [氏名, 住所, K列(診断内容/来院経路), Q列(回数券)]
+// 形式: [氏名, 住所, K列(診断内容/来院経路), Q列(回数券), M列(問診者=セラピスト)]
 const RAW_PATIENTS = [
-  ['ニシハラ リョウ', '東京都目黒区東山3-1-4 ニューリバー東山402', '【SNS2000】', ''],
-  ['ナカセコ ヤスシ', '東京都世田谷区松原3-27-36', '【SNS2000】', ''],
-  ['アライ アキコ', '港区赤坂6-5-25-302', '【HP3500】', '2メンテナンス'],
-  ['ミヤシタ ケイコ', '東京都日野市万願寺4-23-4ジョイパレス603', '【TikTok2000】', 'ディーケア60'],
-  ['ウタハラ マリコ', '調布市小島町2', '【HP3500】', 'AORUプラン'],
-  ['エガミ アキラ', '渋谷区神泉町8-7', '', ''],
-  ['ハシモト メグミ', '静岡県藤枝市高洲55-24', '【HP3500】口コミ', ''],
-  ['カヌカ ミチル', '世田谷区池尻4-29-1-206', '【SNS2000】', ''],
-  ['シモエ エリコ', '渋谷区渋谷1-19-18-614', '【紹介1000】', 'AORUプラン'],
-  ['クワバラ ギョウテン', '東京都武蔵野市吉祥寺本町1-21-8-401', '【SNS2000】', ''],
-  ['オオヤマ ゲン', '世田谷区三宿1-8-22', '【SNS2000】', 'ディーケア60'],
-  ['オオタ ヒロシ', '港区', '【SNS2000】口コミ', ''],
-  ['アンドウ エミ', '東京都渋谷区渋谷1-19-18-2504', '【SNS2000】', ''],
-  ['イタバシ ケイジ', '渋谷区代官山町11-1代官山ハイツ905', '【SNS2000】', ''],
-  ['カミヤ リョウコ', '東京都世田谷区上北沢3-20-7クレール上北沢', '【SNS2000】口コミ', 'ディーケア60'],
-  ['さとう あきら', '神奈川県相模原市緑区太井417-6', '【SNS2000】', ''],
-  ['コウノ マサヤ', '渋谷区笹塚2-27-5-102', '', ''],
-  ['ヒラタ ベニ', '渋谷区富ヶ谷', '【SNS2000】', 'AORUプラン'],
-  ['アダチ ジュンコ', '渋谷区笹塚1-2-8-302', '【SNS2000】口', 'AORUプラン'],
-  ['ナイトウ ハルカ', '東京都渋谷区東1-4-23池田ビル3階', '【紹介2000】', ''],
-  ['マルヤマ ユウコ', '港区南青山6-2-4', '【SNS2000】口コミ', ''],
-  ['ネゴロ カズマ', '世田谷区池尻3-18-10reussite池尻201', '【SNS2000】', ''],
-  ['タカザワ アイコ', '渋谷区渋谷4-4-25', '【HPB3000】口コミ', 'AORUプラン'],
-  ['タガワ アイリ', '渋谷区渋谷1-3-1', '【HPB3000】口コミ', 'AORUプラン'],
-  ['ナガオカ シュウジ', '埼玉県川口市本町3丁目6番19グランクロ', '【TikTok1000】', ''],
-  ['ヤマザキ ミユ', '渋谷区代官山町1-4-603', '【SNS2000】', 'AORUプラン'],
-  ['ヒダカ リュウイチ', '世田谷区用賀1-27-10 201', '【TikTok1000】', ''],
-  ['ハラ ヨウコ', '渋谷区渋谷3-5-1-503', '【SNS2000】口', ''],
-  ['ヒメノ シンタロウ', '渋谷区道玄坂2-18-11-511', '【SNS2000】', 'ディーケア90'],
-  ['トヨダ ラフ', '東京都練馬区上石神井南町13', '【SNS2000】口', ''],
-  ['ナカノ ハジメ', '渋谷区本町2-3-1渋谷本町マンション76', '【SNS2000】口', ''],
-  ['ササヤマ ヒトミ', '渋谷区', '【HPB3000】H', ''],
-  ['ガモウ ヒロミ', '東京都渋谷区幡ヶ谷1-27-5レオパレスプラン', '【SNS2000】', ''],
-  ['タムラ イコ', '南青山5-4-11', '【SNS2000】', ''],
-  ['タカミ タケシ', '渋谷区渋谷2-5-12-1203', '【HP3500】', 'AORUプラン'],
-  ['ユキ ヒロフミ', '横浜市青葉区美しが丘', '【SNS2000】', ''],
-  ['ヤマザキ アツシ', '渋谷区円山町12-2', '【SNS2000】', ''],
-  ['カナイ ホクト', '東京都杉並区浜田山2-20-6', '【紹介3500】', 'AORUプラン'],
-  ['ツダ ナツキ', '東京都渋谷区神宮前1-3-6-716', '【SNS2000】', 'AORUプラン'],
-  ['オネヤマ サヤカ', '渋谷区上原3-31-22', '【SNS2000】', ''],
-  ['フクムラ マユミ', '和歌山県新宮市佐野979-2', '【SNS2000】', ''],
+  ['ニシハラ リョウ', '東京都目黒区東山3-1-4 ニューリバー東山402', '【SNS2000】', '', 'Shoko'],
+  ['ナカセコ ヤスシ', '東京都世田谷区松原3-27-36', '【SNS2000】', '', 'Shoko'],
+  ['アライ アキコ', '港区赤坂6-5-25-302', '【HP3500】', '2メンテナンス', 'Shoko'],
+  ['ミヤシタ ケイコ', '東京都日野市万願寺4-23-4ジョイパレス603', '【TikTok2000】', 'ディーケア60', 'Yusa'],
+  ['ウタハラ マリコ', '調布市小島町2', '【HP3500】', 'AORUプラン', 'Shoko'],
+  ['エガミ アキラ', '渋谷区神泉町8-7', '', '', 'Shoko'],
+  ['ハシモト メグミ', '静岡県藤枝市高洲55-24', '【HP3500】口コミ', '', 'Shoko'],
+  ['カヌカ ミチル', '世田谷区池尻4-29-1-206', '【SNS2000】', '', 'Yusa'],
+  ['シモエ エリコ', '渋谷区渋谷1-19-18-614', '【紹介1000】', 'AORUプラン', 'Shoko'],
+  ['クワバラ ギョウテン', '東京都武蔵野市吉祥寺本町1-21-8-401', '【SNS2000】', '', 'Yusa'],
+  ['オオヤマ ゲン', '世田谷区三宿1-8-22', '【SNS2000】', 'ディーケア60', 'Yusa'],
+  ['オオタ ヒロシ', '港区', '【SNS2000】口コミ', '', 'Shoko'],
+  ['アンドウ エミ', '東京都渋谷区渋谷1-19-18-2504', '【SNS2000】', '', 'Yusa'],
+  ['イタバシ ケイジ', '渋谷区代官山町11-1代官山ハイツ905', '【SNS2000】', '', 'Yusa'],
+  ['カミヤ リョウコ', '東京都世田谷区上北沢3-20-7クレール上北沢', '【SNS2000】口コミ', 'ディーケア60', 'Yusa'],
+  ['さとう あきら', '神奈川県相模原市緑区太井417-6', '【SNS2000】', '', 'Shoko'],
+  ['コウノ マサヤ', '渋谷区笹塚2-27-5-102', '', '', 'Shoko'],
+  ['ヒラタ ベニ', '渋谷区富ヶ谷', '【SNS2000】', 'AORUプラン', 'Yusa'],
+  ['アダチ ジュンコ', '渋谷区笹塚1-2-8-302', '【SNS2000】口', 'AORUプラン', 'Shoko'],
+  ['ナイトウ ハルカ', '東京都渋谷区東1-4-23池田ビル3階', '【紹介2000】', '', 'Shoko'],
+  ['マルヤマ ユウコ', '港区南青山6-2-4', '【SNS2000】口コミ', '', 'Shoko'],
+  ['ネゴロ カズマ', '世田谷区池尻3-18-10reussite池尻201', '【SNS2000】', '', 'Shoko'],
+  ['タカザワ アイコ', '渋谷区渋谷4-4-25', '【HPB3000】口コミ', 'AORUプラン', 'Shoko'],
+  ['タガワ アイリ', '渋谷区渋谷1-3-1', '【HPB3000】口コミ', 'AORUプラン', 'Shoko'],
+  ['ナガオカ シュウジ', '埼玉県川口市本町3丁目6番19グランクロ', '【TikTok1000】', '', 'Shoko'],
+  ['ヤマザキ ミユ', '渋谷区代官山町1-4-603', '【SNS2000】', 'AORUプラン', 'Yusa'],
+  ['ヒダカ リュウイチ', '世田谷区用賀1-27-10 201', '【TikTok1000】', '', 'Shoko'],
+  ['ハラ ヨウコ', '渋谷区渋谷3-5-1-503', '【SNS2000】口', '', 'Yusa'],
+  ['ヒメノ シンタロウ', '渋谷区道玄坂2-18-11-511', '【SNS2000】', 'ディーケア90', 'Yusa'],
+  ['トヨダ ラフ', '東京都練馬区上石神井南町13', '【SNS2000】口', '', 'Yusa'],
+  ['ナカノ ハジメ', '渋谷区本町2-3-1渋谷本町マンション76', '【SNS2000】口', '', 'Yusa'],
+  ['ササヤマ ヒトミ', '渋谷区', '【HPB3000】H', '', 'Yusa'],
+  ['ガモウ ヒロミ', '東京都渋谷区幡ヶ谷1-27-5レオパレスプラン', '【SNS2000】', '', 'Shoko'],
+  ['タムラ イコ', '南青山5-4-11', '【SNS2000】', '', 'Shoko'],
+  ['タカミ タケシ', '渋谷区渋谷2-5-12-1203', '【HP3500】', 'AORUプラン', 'Yusa'],
+  ['ユキ ヒロフミ', '横浜市青葉区美しが丘', '【SNS2000】', '', 'Yusa'],
+  ['ヤマザキ アツシ', '渋谷区円山町12-2', '【SNS2000】', '', 'Shoko'],
+  ['カナイ ホクト', '東京都杉並区浜田山2-20-6', '【紹介3500】', 'AORUプラン', 'Shoko'],
+  ['ツダ ナツキ', '東京都渋谷区神宮前1-3-6-716', '【SNS2000】', 'AORUプラン', 'Shoko'],
+  ['オネヤマ サヤカ', '渋谷区上原3-31-22', '【SNS2000】', '', 'Shoko'],
+  ['フクムラ マユミ', '和歌山県新宮市佐野979-2', '【SNS2000】', '', 'Shoko'],
 ];
 
 // 地名→概算座標（デモ用のローカル擬似ジオコーダー。実運用では Google Geocoding API を使用）
@@ -943,7 +1186,7 @@ const CHANNEL_LABELS = {
   'TikTok': 'TikTok', '紹介': '紹介', 'その他': 'その他',
 };
 
-const PATIENTS = RAW_PATIENTS.map(([name, address, k, q], i) => {
+const PATIENTS = RAW_PATIENTS.map(([name, address, k, q, t], i) => {
   const [lat, lng] = approximateCoords(address);
   return {
     id: 'P' + String(403 + i),
@@ -955,8 +1198,15 @@ const PATIENTS = RAW_PATIENTS.map(([name, address, k, q], i) => {
     channel: parseChannel(k),
     purchased: Boolean(q && q.trim()),
     ticketType: q && q.trim() ? q.trim() : null,
+    therapist: t || '未割当',
   };
 });
+
+const THERAPISTS = ['Yusa', 'Shoko'];
+const THERAPIST_META = {
+  'Yusa':  { label: 'ユサ',   color: '#3b5bdb', soft: '#e7ecfd', initial: 'Y' },
+  'Shoko': { label: 'ショウコ', color: '#e64980', soft: '#fdeaf3', initial: 'S' },
+};
 
 function haversineKm(a, b) {
   const toRad = d => d * Math.PI / 180;
@@ -1017,10 +1267,15 @@ function initPatientMap() {
       fillColor: fill,
       fillOpacity: 0.92,
     });
+    const tmeta = THERAPIST_META[p.therapist];
+    const therapistHtml = tmeta
+      ? `<span class="therapist-badge ${p.therapist.toLowerCase()}">${tmeta.initial} ${tmeta.label}</span>`
+      : '<span style="color:var(--muted);">未割当</span>';
     marker.bindPopup(`
       <strong>${p.name}</strong> (${p.id})<br/>
       住所: ${p.address}<br/>
       距離: ${distanceKm.toFixed(2)} km<br/>
+      担当: ${therapistHtml}<br/>
       来院経路: <span style="color:${ring};font-weight:600;">${CHANNEL_LABELS[p.channel]}</span>
         <span style="color:var(--muted);font-size:11px;">(${p.channelCode || '未記入'})</span><br/>
       回数券: ${p.purchased
@@ -1039,10 +1294,16 @@ function initPatientMap() {
         .filter(cb => cb.checked)
         .map(cb => cb.dataset.channel)
     );
+    const activeTherapists = new Set(
+      Array.from(document.querySelectorAll('.th-toggle'))
+        .filter(cb => cb.checked)
+        .map(cb => cb.dataset.therapist)
+    );
     patientMarkers.forEach(({ marker, patient }) => {
       const okTicket = patient.purchased ? showPurchased : showNotPurchased;
       const okChannel = activeChannels.has(patient.channel);
-      if (okTicket && okChannel) marker.addTo(map);
+      const okTherapist = activeTherapists.has(patient.therapist) || patient.therapist === '未割当';
+      if (okTicket && okChannel && okTherapist) marker.addTo(map);
       else map.removeLayer(marker);
     });
   }
@@ -1057,6 +1318,7 @@ function initPatientMap() {
   document.getElementById('togglePurchased').addEventListener('change', applyFilters);
   document.getElementById('toggleNotPurchased').addEventListener('change', applyFilters);
   document.querySelectorAll('.ch-toggle').forEach(cb => cb.addEventListener('change', applyFilters));
+  document.querySelectorAll('.th-toggle').forEach(cb => cb.addEventListener('change', applyFilters));
 
   // 商圏サマリー
   const buckets = { r3: [], r5: [], out: [] };
@@ -1149,6 +1411,9 @@ function initPatientMap() {
     3km 圏内の購入率が高ければポスティング等の地域施策、経路別の購入率差があればその経路への広告投資を優先すると費用対効果が高まります。
   `;
 }
+
+// 顧客分析タブ（初期表示）のセラピスト別カードを描画
+renderTherapistCards('therapistCardsCustomer');
 </script>
 </body>
 </html>
