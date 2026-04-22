@@ -410,6 +410,27 @@
   }
   .therapist-badge.yusa  { background: #3b5bdb; }
   .therapist-badge.shoko { background: #e64980; }
+  .staff-pill {
+    padding: 8px 14px;
+    border: 1px solid var(--border);
+    background: #fff;
+    border-radius: 999px;
+    font-size: 13px;
+    cursor: pointer;
+    font-family: inherit;
+    color: var(--text);
+  }
+  .staff-pill:hover { background: #f9fafb; }
+  .staff-pill.active {
+    background: var(--primary);
+    color: #fff;
+    border-color: var(--primary);
+    font-weight: 600;
+  }
+  .staff-pill[data-filter="Yusa"].active  { background: #3b5bdb; border-color: #3b5bdb; }
+  .staff-pill[data-filter="Shoko"].active { background: #e64980; border-color: #e64980; }
+  #staffTable td, #staffTable th { font-size: 12px; padding: 8px 10px; }
+  #staffTable td.addr { max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   @media (max-width: 1000px) {
     .grid-3 { grid-template-columns: 1fr 1fr; }
     .kpi-grid { grid-template-columns: 1fr 1fr; }
@@ -448,6 +469,7 @@
 <nav class="tabs">
   <button class="tab active" data-tab="customer">顧客分析</button>
   <button class="tab" data-tab="sales">売上・商圏分析</button>
+  <button class="tab" data-tab="staff">スタッフ別</button>
 </nav>
 
 <main>
@@ -655,6 +677,85 @@
   </section>
 </div>
 <!-- /tab-sales -->
+
+<div class="tab-panel" id="tab-staff">
+  <!-- スタッフ別 KPI -->
+  <div class="kpi-grid" id="staffKpiGrid"></div>
+
+  <section class="section">
+    <h2 class="section-title"><span class="tag">1</span> スタッフ別 担当サマリー</h2>
+    <div class="grid-2" id="therapistCardsStaff"></div>
+  </section>
+
+  <section class="section">
+    <h2 class="section-title"><span class="tag">2</span> スタッフ別 パフォーマンス推移</h2>
+    <div class="grid-2">
+      <div class="card">
+        <h3>月次 担当患者数</h3>
+        <div class="desc">各スタッフの月ごとの新規担当件数</div>
+        <div class="chart-wrap tall"><canvas id="staffTrendChart"></canvas></div>
+      </div>
+      <div class="card">
+        <h3>月次 回数券獲得率</h3>
+        <div class="desc">各スタッフが担当した患者の回数券購入率推移</div>
+        <div class="chart-wrap tall"><canvas id="staffRateChart"></canvas></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2 class="section-title"><span class="tag">3</span> 来院経路 × スタッフ</h2>
+    <div class="grid-2">
+      <div class="card">
+        <h3>経路別 担当件数</h3>
+        <div class="desc">どの経路から来た患者をどちらが多く担当したか</div>
+        <div class="chart-wrap tall"><canvas id="staffChannelChart"></canvas></div>
+      </div>
+      <div class="card">
+        <h3>経路別 回数券獲得率</h3>
+        <div class="desc">経路ごとに各スタッフが獲得できた割合</div>
+        <div class="chart-wrap tall"><canvas id="staffChannelRateChart"></canvas></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2 class="section-title"><span class="tag">4</span> チケット種別 × スタッフ</h2>
+    <div class="card">
+      <h3>獲得チケット内訳</h3>
+      <div class="desc">各スタッフが獲得した回数券の種別構成</div>
+      <div class="chart-wrap tall"><canvas id="staffTicketChart"></canvas></div>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2 class="section-title"><span class="tag">5</span> 担当患者一覧</h2>
+    <div class="card">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+        <button class="staff-pill active" data-filter="all">全員 (<span id="cntAll">—</span>)</button>
+        <button class="staff-pill" data-filter="Yusa">ユサ (<span id="cntYusa">—</span>)</button>
+        <button class="staff-pill" data-filter="Shoko">ショウコ (<span id="cntShoko">—</span>)</button>
+        <input type="text" id="staffSearch" placeholder="氏名・住所で検索" style="margin-left:auto;padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px;min-width:220px;" />
+      </div>
+      <div style="max-height:480px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;">
+        <table class="profile" id="staffTable">
+          <thead style="position:sticky;top:0;background:#fafbff;z-index:1;">
+            <tr>
+              <th>担当</th>
+              <th>氏名</th>
+              <th>住所</th>
+              <th>距離</th>
+              <th>来院経路</th>
+              <th>回数券</th>
+            </tr>
+          </thead>
+          <tbody id="staffTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+</div>
+<!-- /tab-staff -->
 </main>
 
 <script>
@@ -821,6 +922,7 @@ tbody.innerHTML = rows.map(r => {
 const tabButtons = document.querySelectorAll('.tab');
 const tabPanels = document.querySelectorAll('.tab-panel');
 let salesInitialized = false;
+let staffInitialized = false;
 
 tabButtons.forEach(btn => {
   btn.addEventListener('click', () => {
@@ -832,6 +934,10 @@ tabButtons.forEach(btn => {
       salesInitialized = true;
     } else if (target === 'sales' && window._patientMap) {
       setTimeout(() => window._patientMap.invalidateSize(), 50);
+    }
+    if (target === 'staff' && !staffInitialized) {
+      initStaffTab();
+      staffInitialized = true;
     }
   });
 });
@@ -1071,6 +1177,229 @@ function extractArea(address) {
   const m = address.match(/([^都道府県]*?[区市町村])/);
   if (m) return m[1].replace(/^東京|^神奈川県|^埼玉県|^静岡県|^和歌山県/, '');
   return address.slice(0, 6);
+}
+
+/* ==========================================================
+ * スタッフ別タブ
+ * ========================================================== */
+function initStaffTab() {
+  // カード再描画
+  renderTherapistCards('therapistCardsStaff');
+
+  // KPI
+  const kpiGrid = document.getElementById('staffKpiGrid');
+  const totals = THERAPISTS.map(t => {
+    const list = PATIENTS.filter(p => p.therapist === t);
+    const purchased = list.filter(p => p.purchased).length;
+    return { t, total: list.length, purchased, rate: list.length ? Math.round(purchased/list.length*100) : 0 };
+  });
+  const allPurchased = totals.reduce((s, x) => s + x.purchased, 0);
+  const allTotal = totals.reduce((s, x) => s + x.total, 0);
+  const best = [...totals].sort((a,b) => b.rate - a.rate)[0];
+  kpiGrid.innerHTML = `
+    <div class="kpi">
+      <div class="label">総担当患者数（2名合計）</div>
+      <div class="value">${allTotal}</div>
+      <div class="delta" style="color:var(--muted);">ユサ ${totals[0].total} / ショウコ ${totals[1].total}</div>
+    </div>
+    <div class="kpi">
+      <div class="label">回数券獲得数（合計）</div>
+      <div class="value">${allPurchased}</div>
+      <div class="delta" style="color:var(--muted);">獲得率 ${Math.round(allPurchased/allTotal*100)}%</div>
+    </div>
+    <div class="kpi">
+      <div class="label">MVP（獲得率トップ）</div>
+      <div class="value" style="color:${THERAPIST_META[best.t].color};">${THERAPIST_META[best.t].label}</div>
+      <div class="delta up">獲得率 ${best.rate}%</div>
+    </div>
+    <div class="kpi">
+      <div class="label">獲得率差</div>
+      <div class="value">${Math.abs(totals[0].rate - totals[1].rate)}<span style="font-size:14px;">pt</span></div>
+      <div class="delta" style="color:var(--muted);">${totals[0].rate > totals[1].rate ? 'ユサが優位' : 'ショウコが優位'}</div>
+    </div>
+  `;
+
+  // 月次推移（mock：各月の担当患者数と獲得率）
+  const months = ['5月','6月','7月','8月','9月','10月','11月','12月','1月','2月','3月','4月'];
+  const yusaTrend   = [10, 11, 13, 12, 14, 15, 14, 16, 15, 14, 16, 16];
+  const shokoTrend  = [18, 19, 20, 21, 22, 23, 24, 26, 25, 23, 24, 25];
+  const yusaRate    = [38, 40, 41, 42, 43, 44, 43, 45, 44, 43, 44, 44];
+  const shokoRate   = [28, 29, 30, 31, 30, 31, 32, 33, 32, 31, 32, 32];
+
+  new Chart(document.getElementById('staffTrendChart'), {
+    type: 'line',
+    data: {
+      labels: months,
+      datasets: [
+        { label: 'ユサ',   data: yusaTrend,  borderColor: '#3b5bdb', backgroundColor: 'rgba(59,91,219,0.12)', fill: true, tension: 0.3 },
+        { label: 'ショウコ', data: shokoTrend, borderColor: '#e64980', backgroundColor: 'rgba(230,73,128,0.12)', fill: true, tension: 0.3 },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom', labels: { boxWidth: 10 } } },
+      scales: { y: { beginAtZero: true, title: { display: true, text: '担当患者数（人）' } } }
+    }
+  });
+
+  new Chart(document.getElementById('staffRateChart'), {
+    type: 'line',
+    data: {
+      labels: months,
+      datasets: [
+        { label: 'ユサ',   data: yusaRate,  borderColor: '#3b5bdb', backgroundColor: 'rgba(59,91,219,0.12)', fill: false, tension: 0.3 },
+        { label: 'ショウコ', data: shokoRate, borderColor: '#e64980', backgroundColor: 'rgba(230,73,128,0.12)', fill: false, tension: 0.3 },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom', labels: { boxWidth: 10 } } },
+      scales: { y: { beginAtZero: true, max: 60, ticks: { callback: v => v + '%' } } }
+    }
+  });
+
+  // 経路別 × スタッフ（実データ集計）
+  const channelOrder = ['SNS','HP','HPB','TikTok','紹介','その他'];
+  const byStaffChannel = {
+    Yusa:  Object.fromEntries(channelOrder.map(c => [c, { total: 0, purchased: 0 }])),
+    Shoko: Object.fromEntries(channelOrder.map(c => [c, { total: 0, purchased: 0 }])),
+  };
+  PATIENTS.forEach(p => {
+    if (!byStaffChannel[p.therapist]) return;
+    byStaffChannel[p.therapist][p.channel].total++;
+    if (p.purchased) byStaffChannel[p.therapist][p.channel].purchased++;
+  });
+
+  new Chart(document.getElementById('staffChannelChart'), {
+    type: 'bar',
+    data: {
+      labels: channelOrder.map(c => CHANNEL_LABELS[c]),
+      datasets: [
+        { label: 'ユサ',   data: channelOrder.map(c => byStaffChannel.Yusa[c].total),  backgroundColor: '#3b5bdb', borderRadius: 4 },
+        { label: 'ショウコ', data: channelOrder.map(c => byStaffChannel.Shoko[c].total), backgroundColor: '#e64980', borderRadius: 4 },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom', labels: { boxWidth: 10 } } },
+      scales: { y: { beginAtZero: true, title: { display: true, text: '担当件数（人）' } } }
+    }
+  });
+
+  new Chart(document.getElementById('staffChannelRateChart'), {
+    type: 'bar',
+    data: {
+      labels: channelOrder.map(c => CHANNEL_LABELS[c]),
+      datasets: [
+        {
+          label: 'ユサ',
+          data: channelOrder.map(c => byStaffChannel.Yusa[c].total
+            ? Math.round(byStaffChannel.Yusa[c].purchased / byStaffChannel.Yusa[c].total * 100) : 0),
+          backgroundColor: '#3b5bdb', borderRadius: 4
+        },
+        {
+          label: 'ショウコ',
+          data: channelOrder.map(c => byStaffChannel.Shoko[c].total
+            ? Math.round(byStaffChannel.Shoko[c].purchased / byStaffChannel.Shoko[c].total * 100) : 0),
+          backgroundColor: '#e64980', borderRadius: 4
+        },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom', labels: { boxWidth: 10 } } },
+      scales: { y: { beginAtZero: true, max: 100, ticks: { callback: v => v + '%' } } }
+    }
+  });
+
+  // チケット種別 × スタッフ
+  const ticketTypes = ['AORUプラン','ディーケア60','ディーケア90','2メンテナンス'];
+  const ticketCount = {
+    Yusa:  Object.fromEntries(ticketTypes.map(t => [t, 0])),
+    Shoko: Object.fromEntries(ticketTypes.map(t => [t, 0])),
+  };
+  PATIENTS.forEach(p => {
+    if (!p.purchased || !ticketCount[p.therapist]) return;
+    if (ticketCount[p.therapist][p.ticketType] !== undefined) {
+      ticketCount[p.therapist][p.ticketType]++;
+    }
+  });
+  const ticketColors = ['#3b5bdb','#20c997','#f59e0b','#e64980'];
+  new Chart(document.getElementById('staffTicketChart'), {
+    type: 'bar',
+    data: {
+      labels: ['ユサ', 'ショウコ'],
+      datasets: ticketTypes.map((tt, i) => ({
+        label: tt,
+        data: [ticketCount.Yusa[tt], ticketCount.Shoko[tt]],
+        backgroundColor: ticketColors[i],
+        borderRadius: 4,
+      }))
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom', labels: { boxWidth: 10 } }, tooltip: { mode: 'index' } },
+      scales: {
+        x: { stacked: true, beginAtZero: true, title: { display: true, text: '獲得件数' } },
+        y: { stacked: true }
+      }
+    }
+  });
+
+  // 患者一覧テーブル
+  renderStaffTable('all', '');
+  document.getElementById('cntAll').textContent = PATIENTS.length;
+  document.getElementById('cntYusa').textContent = PATIENTS.filter(p => p.therapist === 'Yusa').length;
+  document.getElementById('cntShoko').textContent = PATIENTS.filter(p => p.therapist === 'Shoko').length;
+
+  let currentFilter = 'all';
+  document.querySelectorAll('.staff-pill').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.staff-pill').forEach(b => b.classList.toggle('active', b === btn));
+      currentFilter = btn.dataset.filter;
+      renderStaffTable(currentFilter, document.getElementById('staffSearch').value);
+    });
+  });
+  document.getElementById('staffSearch').addEventListener('input', e => {
+    renderStaffTable(currentFilter, e.target.value);
+  });
+}
+
+function renderStaffTable(filter, query) {
+  const tbody = document.getElementById('staffTableBody');
+  const q = (query || '').trim().toLowerCase();
+  const rows = PATIENTS
+    .filter(p => filter === 'all' || p.therapist === filter)
+    .filter(p => !q
+      || p.name.toLowerCase().includes(q)
+      || p.address.toLowerCase().includes(q));
+
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:24px;">該当する患者が見つかりません</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = rows.map(p => {
+    const tmeta = THERAPIST_META[p.therapist];
+    const badge = tmeta
+      ? `<span class="therapist-badge ${p.therapist.toLowerCase()}">${tmeta.initial} ${tmeta.label}</span>`
+      : '<span style="color:var(--muted);">未割当</span>';
+    const dist = haversineKm(STORE, p).toFixed(1);
+    const ticket = p.purchased
+      ? `<span style="color:#16a34a;font-weight:600;">${p.ticketType}</span>`
+      : '<span style="color:#9ca3af;">なし</span>';
+    return `
+      <tr>
+        <td>${badge}</td>
+        <td><strong>${p.name}</strong></td>
+        <td class="addr" title="${p.address}">${p.address}</td>
+        <td>${dist} km</td>
+        <td><span style="color:${CHANNEL_COLORS[p.channel]};font-weight:600;">${CHANNEL_LABELS[p.channel]}</span></td>
+        <td>${ticket}</td>
+      </tr>
+    `;
+  }).join('');
 }
 
 /* ==========================================================
